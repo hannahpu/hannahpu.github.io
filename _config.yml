@@ -16,7 +16,7 @@ minimal_mistakes_skin    : "mint" #"default", "air", "aqua", "contrast", "dark",
 
 # Site Settings
 locale                   : "en-US"
-title                    : "Adventure in Data Science"
+title                    : "My Adventure in Data Science"
 title_separator          : "-"
 name                     : "Hannah Pu"
 description              : "Website to share Hannah's Learnt stuff and Projects"
