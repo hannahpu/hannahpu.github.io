@@ -104,7 +104,7 @@ analytics:
 # Site Author
 author:
   name             : "Hannah Pu"
-  avatar           : "/assets/images/face.jpeg"# path of avatar image, e.g. "/assets/images/bio-photo.jpg"
+  avatar           : "/assets/images/face.jpg"# path of avatar image, e.g. "/assets/images/bio-photo.jpg"
   bio              : "Master Student in Statistics"
   location         : "Urbana, IL, USA"
   email            : "hannahpu@gmail.com"
