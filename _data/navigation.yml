@@ -10,6 +10,9 @@ main:
     url: /collection-archive/
   - title: "Posts"
     url: /categories/
+  - title: "Tags"
+    url: /tags/
+
 
     #url: /year-archive/
   #- title: "External Links"
