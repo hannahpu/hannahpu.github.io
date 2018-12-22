@@ -1,7 +1,7 @@
 ---
 layout: single
 title: "Hello World!"
-collection: posts
+categories: blog
 tag : blog
 header:
  teaser: "/assets/images/cambridge.jpg"
