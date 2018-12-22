@@ -5,8 +5,7 @@ permalink: /collection-archive/
 author_profile: true
 ---
 
-<h2> Post - by Categories <h2>
-{% _pages/category-archive.html %}
+{% link _pages/category-archive.html %}
 
 {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'"  %}
 {% for year in postsByYear %}
