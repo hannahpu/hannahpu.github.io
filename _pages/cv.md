@@ -4,7 +4,6 @@ permalink: /cv/
 author_profile: true
 ---
 
-![alt text](/assets/pdf/Hannah_Pu_CV.pdf)
-
+<object data="/assets/pdf/Hannah_Pu_CV.pdf" width="1000" height="1000" type='application/pdf'/>
 
 
