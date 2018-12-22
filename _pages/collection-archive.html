@@ -4,7 +4,7 @@ title: "Posts by Year"
 permalink: /collection-archive/
 author_profile: true
 ---
-{{ site.baseurl }}{% link _pages/category-archive.html % }
+{{ /categories }}{% _pages/category-archive.html %}
 
 {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'"  %}
 {% for year in postsByYear %}
