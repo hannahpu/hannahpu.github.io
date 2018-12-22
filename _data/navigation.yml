@@ -6,8 +6,11 @@ main:
     url: /about/
   - title: "CV"
     url: /cv/
-  - title: "Posts"
+  - title: "Collection"
     url: /collection-archive/
+  - title: "Posts"
+    url: /categories/
+
     #url: /year-archive/
   #- title: "External Links"
   #   url: /links/
