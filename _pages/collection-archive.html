@@ -5,7 +5,8 @@ permalink: /collection-archive/
 author_profile: true
 ---
 
-<a href="https://hannahpu.github.io/categories/">Posts by Categories</a>
+<p align="right"> or see :  <a href="https://hannahpu.github.io/categories/">Posts by Categories</a> ;  <a href="https://hannahpu.github.io/tags/">Posts by Tags</a> </p>
+
 
 {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'"  %}
 {% for year in postsByYear %}
