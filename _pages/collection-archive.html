@@ -5,11 +5,8 @@ permalink: /collection-archive/
 author_profile: true
 ---
 
-([Link to a document]({% _pages/category-archive.html %}))
-
-
-
-([Icons](_pages/category-archive.html))
+[Posts - by Categories](https://mmistakes.github.io/minimal-mistakes/docs/helpers/#table-of-contents)
+[Posts - by Tags](https://mmistakes.github.io/minimal-mistakes/docs/helpers/#table-of-contents)
 
 {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'"  %}
 {% for year in postsByYear %}
