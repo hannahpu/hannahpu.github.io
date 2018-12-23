@@ -6,13 +6,6 @@ author_profile: true
 ---
 
 
-([Link to a document]({% _pages/category-archive.html %}))
-
-
-
-([Icons](_pages/category-archive.html))
-
-
 {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'"  %}
 {% for year in postsByYear %}
   <h2 id="{{ year.name | slugify }}" class="archive__subtitle">{{ year.name }}</h2>
