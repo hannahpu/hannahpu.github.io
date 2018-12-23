@@ -5,8 +5,9 @@ permalink: /collection-archive/
 author_profile: true
 ---
 
-[Posts - by Categories](https://mmistakes.github.io/minimal-mistakes/docs/helpers/#table-of-contents)
-[Posts - by Tags](https://mmistakes.github.io/minimal-mistakes/docs/helpers/#table-of-contents)
+[Posts - by Categories](https://hannahpu.github.io/categories/)
+
+[Posts - by Tags](https://hannahpu.github.io/tags/)
 
 {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'"  %}
 {% for year in postsByYear %}

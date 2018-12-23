@@ -6,18 +6,16 @@ main:
     url: /about/
   - title: "CV"
     url: /cv/
-  - title: "Collection"
-    url: /collection-archive/
   - title: "Posts"
-    url: /categories/
-  - title: "Tags"
-    url: /tags/
-
-
-    #url: /year-archive/
-  #- title: "External Links"
-  #   url: /links/
-  # - title: "Sample Collections"
-  #   url: /collection-archive/
-  # - title: "Sitemap"
-  #   url: /sitemap/
+    url: /collection-archive/
+# - title: "Posts"
+#   url: /categories/
+# - title: "Tags"
+#   url: /tags/
+#url: /year-archive/
+#- title: "External Links"
+#   url: /links/
+# - title: "Sample Collections"
+#   url: /collection-archive/
+# - title: "Sitemap"
+#   url: /sitemap/

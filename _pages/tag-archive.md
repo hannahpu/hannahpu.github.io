@@ -5,6 +5,10 @@ title: "Posts by Tag"
 author_profile: true
 ---
 
+[Posts - by Year Collection](https://hannahpu.github.io/collection-archive/)
+
+[Posts - by Categories](https://hannahpu.github.io/categories/)
+
 {% include group-by-array collection=site.posts field="tags" %}
 
 {% for tag in group_names %}
