@@ -1,0 +1,38 @@
+---
+title: "Plotly"
+author: 'Chiehhan Pu (NetID: chpu2)'
+date: "12/25/2018"
+output: html_document
+---
+
+```{r}
+library(plotly)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+```
+
+
+```{r}
+setwd("/Users/hannahpu/OneDrive - University of Illinois - Urbana/R/data")
+
+#Use ggplotly
+##Dataset 1
+wine = read.csv("wine.csv", header = FALSE)
+wine.name = c("Type", "Alcohol", "Malic", "Ash", "Alcalinity", "Magnesium", "Phenols", "Flavanoids", "Nonflavanoids", "Proanthocyanins", "Color", "Hue", "Dilution", "Proline")
+colnames(wine) = wine.name
+wine$Type = as.factor(wine$Type)
+glimpse(wine)
+
+```
+
+```{r}
+static = wine %>%
+  ggplot(aes(x = Flavanoids, y = Proline, color = Type)) +
+  geom_point()
+static
+ggplotly(static)
+```
+
+
+
