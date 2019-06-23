@@ -1,0 +1,916 @@
+---
+title: |
+    | STAT431 Project Report 
+    | Bayesian Hierarchical Analysis of 
+    | School Examination Results
+author: 'Yang Du (yangd2), Anqi Li (anqili4), Hannah Pu (chpu2)'
+date: "5/8/2019"
+output: 
+  pdf_document:
+    toc: true
+  geometry: margin=1in
+  fontsize: 12pt
+header-includes:
+   - \usepackage{setspace}
+   - \onehalfspacing
+   - \setlength\parindent{24pt}
+   - \usepackage[font={large, bf}]{caption}
+   - \usepackage{float}
+   - \usepackage{bm}
+   - \usepackage{upgreek}
+---
+
+```{r setup, echo = FALSE,  include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, out.width = '80%', out.height = '80%', fig.align = 'center')
+# load packages
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+library(plyr)
+library(dplyr)
+library(grid)
+library(png)
+# for descriptive analysis
+data = read.table('Exam.txt', sep = ' ', col.names = c('SchoolID', 'StudentID', 'Score', 'Constant', 'LRT', 'Gender_Student', 'Gender_School', 'School_avg_score', 'Student_Verbal_score', 'Student_band_score' ))
+cols <- c(1,2,6,7)
+data[,cols] <- lapply(data[,cols], factor)
+# load results
+load('results_Hannah/x3_results100000.RData')
+load('results_Hannah/x2_a1_results100000.RData')
+load('results_Yang/mod2_a0a1/mod2_a0a1.RData')
+load('results_Yang/mod2_bivariate/mod_2_bivariate.RData')
+load('results_Anqi/results_x1/x1_results100000.RData')
+load('results_Anqi/results_x2_u/x2_u_results100000.RData')
+```
+
+# 1. Introduction  
+
+&nbsp; &nbsp; &nbsp; &nbsp;  In the field of education, researchers have been interested in investigating factors that could successfully predict students' academic performances. A large volume of papers have been published, such as Nuttall et al. (1989) and Sammons et al. (1993), based on which school environment is one of those key factors. Among those studies, various quantitative methodologies have been employed, such as regression, ANOVA, and hierarchical Bayesian analysis (e.g., Aitkin and Longford, 1986). Specifically, the hierarchical framework provides a useful tool to capture the variations across schools or other levels. In this project, we reinvestigated the exam data provided in Goldstein et al. (1993). In their paper, three hierarchical models were implemented to examine the relationships between students' academic achievement and gender as well as London Reading Test (LRT) score.
+
+In this study, we are interested in how students' exam scores vary with different schools considering certain predictors. Specifically, this project tends to answer the following questions: (1) How variable are exam scores across different schools? (2) How does the London Reading Test (LRT) score influence the exam score across different schools? (3) How do gender and the LRT score together influence the exam score? (4) How do different model formats affect the model fit and prediction?
+
+
+# 2. Data Source and Exploratory Data Analysis (EDA)
+
+&nbsp; &nbsp; &nbsp; &nbsp;   Examination results were obtained from 65 schools of London in early 1990s. The exam is General Certificate of Secondary Examination (GCSE) and our scores are the total scores of all disciplines. Note that the exam scores are standardized in our data. The data is obtained from Center of Multilevel Modeling in University of Bristol, with  4,059 students from 65 schools. 
+
+The obtained data consist of 10 variables : School ID, Student ID, Normalised Exam Score (outcome variable), Constant Vector, Standardised LR Test Score (LRT), Student Gender (0 = boys, 1 = girls), School Gender (1 = mixed school, 2 = boys school, 3 = girls), School Average of Intake Score, Student Level Verbal Reasoning (VR) Score Band at Intake (1 = bottom 25%, 2 = mid 50%, 3 = top 25%), and Band of Students Intake Score (1 = bottom 25%, 2 = mid 50%, 3 = top 25%).  
+
+For this project, we will focus on 1 variable as random effect : `SchoolID`, 2 explanatory variables : `Student gender` and `Standardised LR test score (LRT)` and 1 outcome variable : `Normalised exam score (Score)`. 
+
+Figure \ref{fig:histbar} plots the histogram and bar plots of `Student gender` and `LRT` and the outcome variable : `Score`. It can be seen that the empirical distribution of LRT and score are centered at zero and have long and approximately equal left and right tail. Moreover, it's apparent that more girls are included in our data--2435 girls versus 1623 boys. Within most schools, more than 10 students were recorded and the number of recorded students are relatively balanced across most schools. Only two schools have recorded fewer than 10 students (School 48 and School 54). 
+
+```{r, fig.cap='\\label{fig:histbar}Histogram and bar plots of single variables', fig.height=8, fig.pos='H'}
+grid.arrange(
+ggplot(data, aes(Score)) + 
+  geom_histogram(bins  = 50),
+ggplot(data, aes(LRT)) + 
+  geom_histogram(bins  = 50),
+ggplot(data, aes(Gender_Student)) +
+  geom_bar(),
+ggplot(data, aes(SchoolID)) +
+  geom_bar() + coord_flip() + theme(axis.title.y = element_text(size = 6))
+)
+```
+
+Figure \ref{fig:Scoreplots} shows the outcome variable `Score` against the other variables. It can be seen in the boxplot that school variations are manifest across schools while student gender doesn't seem to impact scores that much. The scatter plot between score and LRT shows an obvious positive relationship, higher LRT tends to have higher scores.
+
+```{r, fig.cap='\\label{fig:Scoreplots}Plots of Score versus different variables', fig.height=8, fig.pos='H'}
+grid.arrange(
+ggplot(data, aes(SchoolID, Score)) +
+  geom_boxplot(),
+ggplot(data, aes(Gender_Student, Score)) +
+  geom_boxplot(),
+ggplot(data, aes(LRT, Score)) +
+  geom_point()
+)
+```
+
+# 3. Method and Model
+
+&nbsp; &nbsp; &nbsp; &nbsp;  For Bayesian model estimation, the burnin length is set based on convergence assessment for each model. And in total 101000 iterations are run for each model. The convergence assessments are attached in Appendix, which include gelman statistics, gelman plots, autocorrelation plots, and traceplots.
+
+## Model 1
+
+&nbsp; &nbsp; &nbsp; &nbsp;  Considering the school level as a random factor, we start with the simplest hierarhical model exploring the extent to which exam scores vary within and between schools. The model employed is given as below.
+$$
+Model\;1: Y_{ij}=\mu+\alpha_i+\epsilon_{ij}
+$$
+where $Y_{ij}$ represents the exam score of student $j$ in school $i$, $\mu$ represents the general mean across all students and schools, $\alpha_i$ denotes the random effect from school $i$, and $\epsilon_{ij}$ is the error for each individual student. For the convenience of model construction, we reparametrize $\mu_i=\mu+\alpha_i$ and the model can be thereby rewritten as 
+$$
+Y_{ij}=\mu_i+\epsilon_{ij}.
+$$
+And for Bayesian estimation, it can be further formulated as
+$$
+\begin{aligned}
+Y_{ij}|\mu_i, \sigma^2_W &\sim indep. N(\mu_i, \sigma^2_W) \\
+\mu_i|\mu, \sigma^2_B &\sim i.i.d\; N(\mu,\sigma^2_B)
+\end{aligned}
+$$
+
+We set the priors as 
+$$
+\begin{aligned}
+\mu &\sim N(0, 1000000) \\
+\sigma^2_W &\sim IG(0.001, 0.001) \\
+\sigma^2_B &\sim IG(0.001, 0.001)
+\end{aligned}
+$$
+
+Furthermore, intra-class correlation $\rho=\frac{\sigma^2_B}{\sigma^2_B+\sigma^2_W}$ is checked. 
+
+## Model 2A: univariate priors
+
+&nbsp; &nbsp; &nbsp; &nbsp;  In this model, LRT score is included as the predictor in the models. As the first model involving LRT score, school level is still considered as the random factor which will influence both the intercept and the slope. The model is given as below,
+$$
+Model \; 2A: Y_{ij}=\alpha_{0i}+\alpha_{1i}(x_{ij}-\bar{x})+\epsilon_{ij}
+$$
+where $\epsilon_{ij} \sim i.i.d \; N(0, \sigma^2_y)$. And it can be reformulated as 
+$$
+Y_{ij}|\alpha_{0i},\alpha_{1i},\sigma^2_y \sim indep \; N(\alpha_{0i}+\alpha_{1i}(x_{ij}-\bar{x}),\sigma^2_y)
+$$
+
+For this model, we first set the priors of $\alpha_{0i}$ and $\alpha_{1i}$ to be independent. Therefore, the priors are given as follows.
+$$
+\begin{aligned}
+\alpha_{0i}|\beta_0, \sigma^2_{\alpha_0} &\sim N(\beta_0,\sigma^2_{\alpha_0}) \\
+\alpha_{1i}|\beta_1, \sigma^2_{\alpha_1}&\sim N(\beta_1,\sigma^2_{\alpha_1}) \\
+\beta_0 &\sim N(\mu_0, \sigma^2_0) \\
+\beta_1 &\sim N(\mu_1, \sigma^2_1) \\
+\sigma^2_{\alpha_0} &\sim IG(a_{\alpha_0},b_{\alpha_0}) \\
+\sigma^2_{\alpha_1} &\sim IG(a_{\alpha_1},b_{\alpha_1})
+\end{aligned}
+$$
+And specifically in this project $\mu_0=\mu_1=0$, $\sigma^2_0=\sigma^2_1=10^{-6}$, and $a_{\alpha_0}=a_{\alpha_1}=b_{\alpha_0}=b_{\alpha_1}=0.001$. The posterior correlation of $\beta_0$ and $\beta_1$ is also checked.
+
+## Model 2B: bivariate priors
+
+&nbsp; &nbsp; &nbsp; &nbsp;  Model 2B is essentially the same as model 2A except for the difference that the priors in model 2B follows bivariate normal distribution. 
+
+$$
+Y_{ij}=\alpha_{0i}+\alpha_{1i}(x-\bar{x})
+$$
+where $x$ denotes the LRT score. The priors followed bivariate normal distribution. 
+$$
+\bm{\alpha_{i}}=
+\begin{bmatrix}
+\alpha_{0i}\\\alpha_{1i}
+\end{bmatrix}
+\Bigg\rvert
+\bm{\beta, \Sigma_{\alpha}}
+\sim
+i.i.d.N_2(\bm{\beta,\Sigma_{\alpha}})
+$$
+where 
+$$
+\bm{\beta}=
+\begin{bmatrix}
+\beta_0\\\beta_1
+\end{bmatrix}
+\;\;\;\;\;\;\;
+\bm{\Sigma_\alpha}=
+\begin{bmatrix}
+\sigma^2_{\alpha0}&\sigma_{\alpha01}\\
+\sigma_{\alpha01}&\sigma^2_{\alpha1}
+\end{bmatrix}
+$$
+
+We set the priors as 
+$$
+\begin{aligned}
+\bm{\beta} &\sim N_2(\bm{\mu_0}, \bm{\Sigma_0}) \\ 
+\bm{\Sigma^{-1}_\alpha} &\sim Wishart_2(\bm{\Omega}, \bm{\nu})
+\end{aligned}
+$$
+where $\bm{\beta}$ and $\bm{\Sigma_\alpha^{-1}}$ are independent. $\mu_0$ is a $2 \times 1$ vector, $\bm{\Sigma_0}$ and $\Omega$ are $2 \times 2$ matrices (positive definite), and $\nu$ is a positive scalar. 
+
+
+## Model 2C: common slope and common intercept
+
+&nbsp; &nbsp; &nbsp; &nbsp;  In this model, we assume that LRT scores influence the exam scores equally across all schools and the exam means across all schools are the same. In other words, instead of modelling multilevels of schools, this model is a simple linear regression models with the LRT score as the predictor. 
+$$
+Model \space 2C:Y_{ij}=\alpha_0+\alpha_1(x-\bar{x})
+$$
+
+where the priors are 
+$$
+\begin{aligned}
+\alpha_0 &\sim N(0, 0.000001) \\
+\alpha_1 &\sim N(0, 0.000001) \\
+\sigma_y^2 &\sim IG(0.001, 0.001) \\
+\end{aligned}
+$$
+
+
+## Model 2D: common slope
+
+$$
+Model \space 2D:Y_{ij}=\alpha_{0i}+\alpha_{1}(x_{ij}-\bar{x})+\epsilon_{ij} 
+$$
+
+where $i$ represents school ID and $j$ represents specific student. $x_{ij}$ is LRT, $\alpha_{0i}$ is associated with the school level variation, $\alpha_{1}$ is fixed, and $\epsilon_{ij}$ is associated with student level variation.  
+
+where the priors are 
+$$
+\begin{aligned}
+\alpha_{0i}|\beta_0, \sigma^2_{\alpha_0} &\sim N(\beta_0,\sigma^2_{\alpha_0}) \\
+\alpha_1 &\sim N(0, 0.000001) \\
+\beta_0 &\sim N(\mu_0, \sigma^2_0) \\
+\sigma^2_{\alpha_0} &\sim IG(a_{\alpha_0},b_{\alpha_0}) \\
+\end{aligned}
+$$
+
+## Model 3  
+
+$$
+Model \space 3:Y_{ij}=\alpha_{0i}+\alpha_{1i}(x_{1ij}-\bar{x}) + \alpha_{2}x_{2ij} +\epsilon_{ij} 
+$$
+
+where $i$ represents school type and $j$ represents specific student. $x_{1ij}$ is LRT, $x_{2ij}$ is student gender, $\alpha_{0i}$ and $\alpha_{1i}$ are associated with the school level variation, $\alpha_{2}$ is fixed,and $\epsilon_{ij}$ is associated with student level variation.
+
+where the priors are 
+$$
+\begin{aligned}
+\alpha_{0i}|\beta_0, \sigma^2_{\alpha_0} &\sim N(\beta_0,\sigma^2_{\alpha_0}) \\
+\alpha_{1i}|\beta_1, \sigma^2_{\alpha_1}&\sim N(\beta_1,\sigma^2_{\alpha_1}) \\
+\alpha_2 &\sim N(0, 0.000001) \\
+\beta_0 &\sim N(\mu_0, \sigma^2_0) \\
+\beta_1 &\sim N(\mu_1, \sigma^2_1) \\
+\sigma^2_{\alpha_0} &\sim IG(a_{\alpha_0},b_{\alpha_0}) \\
+\sigma^2_{\alpha_1} &\sim IG(a_{\alpha_1},b_{\alpha_1})
+\end{aligned}
+$$
+
+
+```{r, fig.cap="\\label{fig:acyclic}Acyclic directed graphs", fig.height=10, fig.path='H'}
+img1 = rasterGrob(as.raster(readPNG("Acyclic/mod1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("Acyclic/mod2A.png")), interpolate = FALSE)
+img3 = rasterGrob(as.raster(readPNG("Acyclic/mod2B.png")), interpolate = FALSE)
+img4 = rasterGrob(as.raster(readPNG("Acyclic/mod2C.png")), interpolate = FALSE)
+img5 = rasterGrob(as.raster(readPNG("Acyclic/mod2D.png")), interpolate = FALSE)
+img6 = rasterGrob(as.raster(readPNG("Acyclic/mod3.png")), interpolate = FALSE)
+grid.arrange(img1, img2, img3, img4, img5, img6, ncol = 2, nrow = 3)
+```
+
+Acyclic directed graphs of all models are shown in figure \ref{fig:acyclic}. All JAGS code of the above mentioned models are shown in Appendix.
+
+# 4. Analysis Results
+
+## 4.1 Model Construction and Convergence check
+
+&nbsp; &nbsp; &nbsp; &nbsp;  Using the models constructed in JAGS, hyperpriors were initialized and 3 chains were set for each model, the initialization values of the 3 chains were ranged from low values to high values (see appendix, Table \ref{tab:table1} to Table \ref{tab:table6}). Detailed R codes for running the models are shown in Appendix. Convergence is checked by looking at  traceplots, Gelman Rubin plots, and Gelman rubin statistics.The number of burin is determined by checking if all chains in traceplots overlapped and Gelmin Rubin statistic is below $1.05$. All models were first given 1000 initial runs and is noticed that convergence was not yet reached. After that, $100000$ more iterations were applied and all models successfully converged. Gelman Rubin statistics for all hyperparameters were around 1. Monte carlo error also shows to be less than 1/20 of the usual standard error (Table \ref{tab:table7}), which indicates that Monte carlo error is sufficiently low. Autocorrelation shows that there is not much autocorrelaton at higher lags. All traceplots, gelman rubin plots, and autocorrelation plots of the 100000 iterations are shown in appendix. 
+
+```{r}
+## se
+load('model_yang_RData')
+# mod1
+mod1_SD = range(summary_x1$statistics[,2])
+mod1_montese = range(summary_x1$statistics[,4])
+mod1_se = cbind(mod1_SD[1], mod1_SD[2], mod1_montese[1], mod1_montese[2])
+# mod2u
+mod2_u_SD = range(summary_x2_u$statistics[,2])
+mod2_u_montese = range(summary_x2_u$statistics[,4])
+mod2_u_se = cbind(mod2_u_SD[1], mod2_u_SD[2], mod2_u_montese[1], mod2_u_montese[2])
+# mod2b
+mod2_b_SD = range(summary_x2_b$statistics[,2])
+mod2_b_montese = range(summary_x2_b$statistics[,4])
+mod2_b_se = cbind(mod2_b_SD[1], mod2_b_SD[2], mod2_b_montese[1], mod2_b_montese[2])
+# mod2a1
+mod2_a1_SD = range(summary_x2_a1$statistics[,2])
+mod2_a1_montese = range(summary_x2_a1$statistics[,4])
+mod2_a1_se = cbind(mod2_a1_SD[1], mod2_a1_SD[2], mod2_a1_montese[1], mod2_a1_montese[2])
+# mod2a0a1
+mod2_a0a1_SD = range(summary_x2_a0a1$statistics[,2])
+mod2_a0a1_montese = range(summary_x2_a0a1$statistics[,4])
+mod2_a0a1_se = cbind(mod2_a0a1_SD[1], mod2_a0a1_SD[2], mod2_a0a1_montese[1], mod2_a0a1_montese[2])
+# mod2
+mod3_SD = range(summary_x3$statistics[,2])
+mod3_montese = range(summary_x3$statistics[,4])
+mod3_se = cbind(mod3_SD[1], mod3_SD[2], mod3_montese[1], mod3_montese[2])
+se_all = rbind(mod1_se, mod2_u_se, mod2_b_se, mod2_a1_se, mod2_a0a1_se, mod3_se)
+se_all = cbind(rep(1,6), se_all)
+se_all = round(se_all, 5)
+colnames(se_all) = c("Gelman Rubin stats","SD (min)", "SD (max)", "Time-series SE (min)", "Time-series SE (max)")
+rownames(se_all) = c("Model 1", "Model 2A", "Model 2B", "Model 2C", "Model 2D", "Model 3")
+table7 = se_all
+kable(table7, caption = "\\label{tab:table7}Monte Carlo errors and standard error in different models")
+
+```
+
+
+## 4.2 Model Comparison
+
+&nbsp; &nbsp; &nbsp; &nbsp;  In the above analysis, six models with different predictors and priors are illustrated. In this section, we compared the model fit  of all six models. Specifically, we utilized deviance information criterion (DIC), which considers both model and prior fit to the data and the complexity of the model. Specifically in JAGs, it is implemented using Plummer's DIC (reference). The DIC values of the six models are given in Table \ref{tab:dic}. 
+
+We could see that the first model has the largest DIC value, which is within our expectation considering that it contains no predictors. Model 3 has the smallest DIC, which indicates it fits the data the best among all the six models. Although it has more predictors, it increases the model fit more than the model complexity penalty. Among the model settings in Model 2, random intercepts and slopes perform better compared to the fixed cases. Additionally, the model with univariate priors provides a slightly better fit than multivariate priors. The results among the six models imply that more predictors and more flexibility of the parameters will yield better model fit. 
+
+```{r}
+dic <- cbind(10910, 9218, 9222, 9767, 9269, 9193)
+colnames(dic) <- c('Model 1', 'Model 2A', 'Model 2B', 'Model 2C', 'Model 2D', 'Model 3')
+rownames(dic) <- c('DIC')
+knitr::kable(dic,caption='\\label{tab:dic}Deviance Information Criterion values of all models',format='pandoc',align=c('c','c','c','c','c','c'))
+
+```
+
+## 4.3 Posterior distribution analysis
+
+### Model 1
+
+&nbsp; &nbsp; &nbsp; &nbsp;  From the results of Model 1, we know that the mean effect across school is $-0.0133$. School 53 had the highest positive effect on exam score, which is $0.9364$. School 59 with random effect $-0.9502$ had the largest negative effect on exam score. For certain schools, the 95\% posterior interval of their random intercept included $0$, which indicates that their effects are not significant. For example, school 57 had very small influence. The variance between schools was $0.177$ and within schools was $0.848$, which implies there is more variation within school. The correlation between scores from students of the same school is $0.1718$, showing that there is correlation but relatively small. 
+
+### Model 2A
+
+&nbsp; &nbsp; &nbsp; &nbsp;  The posterior correlation of $\beta_0$ and $\beta_1$ can be shown from the Figure \ref{fig:correlation}. It indicates that all $\beta_1$s are above 0, and $\beta_0$s are symmetric to 0. There is no obvious trend between $\beta_0$ and $\beta_1$. 
+
+```{r, fig.cap="\\label{fig:correlation}Posterior correlation of beta0 and beta1", out.width='60%', out.height='60%',fig.pos='H'}
+include_graphics("Rplot_x1.png")
+```
+
+Moreover, the estimation results show that the random intercept has the mean close to $0$ with relatively large variation $0.306$. Random slopes have mean around 0.557 with relatively small variation $0.121$. 
+
+### Model 2B
+
+&nbsp; &nbsp; &nbsp; &nbsp;  As implied earlier, to test if the variances of $\alpha_0$ and $\alpha_1$ are correlated, we adopted the bivariate priors in model 2B. While the posterior means of $\beta_0$ and $\beta_1$ and $sigma.y$ were consistent with their posterior means in Model 2A, it's also manifest that the posterior means of the covariance between $\alpha_0$ and $\alpha_1$ as well as their correlation coefficient were both close to zero. In fact, when we examined their 95% credible intervals, zero was included in both covariance and the correlation. In other words, $\alpha_0$ and $\alpha_1$ based on our data may be in fact independent and we do not necessarily need to adopt the bivariate normal distribution as our prior. This can further be verified by the DIC of models 2A and 2B that the DIC of Model 2B is slightly higher than 2A, indicating the univariate priors may be more proper based on our data. 
+
+### Model 2C
+
+&nbsp; &nbsp; &nbsp; &nbsp;  By implementing Model 2C, our primary purpose was to see if there are individual differences across all 65 schools. Hence, as opposed to models 2A or 2B which assumed school differences, this model only specified a common slope and a common intercept. According to our results, the parameter estimates were in line with models 2A and 2B, where the intercept was close to zero while $\alpha_1$ is about $0.595$, indicating the LRT scores was positively correlated with the exam score. However, without specifying schools' difference, the result of Model 2C showed that the posterior mean of the exam score variance was higher than its posterior mean in models 2A or 2B, suggesting that the variance of the exam scores were not as well-explained by the predictor, LRT scores, as in models 2A or 2B.  Thereby, we may consider retaining the school differences in our model. The DICs of models 2A, 2B, and 2C also showed that Model 2C did not fit our data properly as it is much higher than models 2A and 2B. 
+
+### Model 2D
+
+&nbsp; &nbsp; &nbsp; &nbsp;  Model 2D was modified from Model 2A and set the slope to a common slope. From the results, it can be seen that posterior mean of $alpha1$ results in `r round(summary_x2_a1$statistics[1,1])`. $\beta_0$ and $sigma.alpha0$ are `r round(summary_x2_a1$statistics[2,1])` and `r round(summary_x2_a1$statistics[4,1])`, which were slightly larger than in Model 2A. $sigma.y$ resulted in posterior mean close to the posterior mean in Model 2A, which was `r round(summary_x2_a1$statistics[5,1])`.
+
+### Model 3
+
+&nbsp; &nbsp; &nbsp; &nbsp;  Model 3 extended Model 2A by adding another explanatory factor: student gender. The summary statistics were shown in table \ref{tab:mod3}. The posterior mean of $\beta_0$ (`r round(summary_x3$statistics[2,1], 3)`) showed to be lower than the posterior mean in Model 2A (`r round(summary_x2_u$statistics[1,1], 3)`). The posterior means of $\beta_1$, $sigma.y$, $sigma.alpha0$, and $sigma.alpha1$ were consistent with their posterior means in Model 2A. The posterior mean of $alpha2$,i.e. the coefficient for student gender, was shown to be `r round(summary_x2_a1$statistics[1,1],3)`. When comparing the models using dic, it can be seen from table \ref{tab:dic} that Model 3 had the best model fit.
+
+```{r}
+x3_result = cbind(summary_x3$statistics,summary_x3$quantiles[,c(1,5)])
+x3_result = round(x3_result, 5)
+kable(x3_result,caption='\\label{tab:mod3}Summary statistics for Model 3')
+```
+
+## 4.4 Posterior predictive $p$ value
+
+&nbsp; &nbsp; &nbsp; &nbsp;  The posterior predictive $p$ values of all models were presented in Table \ref{tab:ppp}. According to Cowles (2013), if the posterior predictive $p$ value is close to $.5$, it suggests that the model does not show serious disagreement with our data and hence the model is acceptable. From Table \ref{tab:ppp}, we see that the posterior predictive $p$ values that all models yielded were close to $.5$, indicating that all models did not show serious discrepancies from the data. Given the fact that all models are essentially regression models, we may conclude that regression model is in accordance with our data.
+
+```{r,echo=FALSE}
+model1 <- round(c(4.993e-01, 0.50000, 9.129e-04,9.107e-04, 0.00000, 1.00),5)
+model2A <- round(c(0.499288, 0.500000, 9.569e-04,9.574e-04, 0.00000, 1.00),5)
+model2B <- round(c(0.49989, 0.500001, 9.622e-04,9.622e-04, 0.00000, 1.00),5)
+model2C <- round(c(0.4994370, 0.500001, 9.623e-04,9.639e-04, 0.00000, 1.00),5)
+model2D <- round(c(0.500055555, 0.500000839, 9.174667e-04,  9.174686e-04, 0.00000, 1.00),5)
+model3 <- round(c(0.4996987, 0.500000751, 9.174665e-04,   9.189661e-04, 0.00000, 1.00),5)
+ppp <- rbind(model1, model2A, model2B, model2C, model2D, model3)
+colnames(ppp) <- c('Mean','SD','Naive SE','Time-series SE','2.5%','97.5%')
+#rownames(ppp) <- paste('Model', 1:6,sep=' ')
+knitr::kable(ppp,caption='\\label{tab:ppp}Posterior Predictive p values of all models',format='pandoc',align=c('c','c','c','c','c','c'))
+```
+
+
+# 5. Conclusion and Discussion
+
+&nbsp; &nbsp; &nbsp; &nbsp;  Based on our analysis, as what we observed from our preliminary descriptive analyses, school level does impose considerable difference on students' exam scores. Different schools will lead to different influences of LRT score on exam scores. Morever, even though the effect of gender was not so compelling in our descriptive analyses, it does impact students' scores based on our hierarchical model (girls' scores are relatively higher than boys'). 
+
+Our hierarchical analyses only took student gender, LRT scores, and school level differences into account. One possible further direction can be including more exploratory variables, such as the band of students' intake scores into our regression models.
+
+
+# 6. Reference
+
+1. Aitkin, M., & Longford, N. (1986). Statistical modelling issues in school effectiveness studies. Journal of the Royal Statistical Society: Series A (General), 149(1), 1-26.  
+2. A Multilevel Analysis of School Examination Results (1993) Oxford Review of Education, 19:4, pp 425-433 
+3. University of Bristol (http://www.bristol.ac.uk/cmm/learning/mmsoftware/data-rev.html#exam)
+4. Nuttall, D. L., Goldstein, H., Prosser, R., & Rasbash, J. (1989). Differential school effectiveness. International Journal of Educational Research, 13(7), 769-776.
+5. Sammons, P., Nuttall, D., & Cuttance, P. (1993). Differential school effectiveness: results from a reanalysis of the Inner London Education Authority's Junior School Project data. British Educational Research Journal, 19(4), 381-405.
+
+
+# 7. Appendix
+
+## 7.1 Hyperparameters
+
+```{r}
+mod1_hyper = c("mu0", "tausqW", "tausqB")
+mod1_hyper_chain1 = c(1500, 0.001, 0.001)
+mod1_hyper_chain2 = c(3000, 1, 1)
+mod1_hyper_chain3 = c(0, 0.00001, 0.00001)
+# table
+mod1_results = as.data.frame(cbind(mod1_hyper_chain1, mod1_hyper_chain2, mod1_hyper_chain3))
+mod1_results$hyperparameters = mod1_hyper
+mod1_results$gelman_stat = 1
+colnames(mod1_results) = c("Chain1_initial", "Chain2_initial", "Chain3_initial", "Hyperparameters", "Gelman_Rubin")
+mod1_results = mod1_results %>% select(Hyperparameters, everything())
+table1 = mod1_results
+kable(table1, caption = "\\label{tab:table1}Hyperparameters and gelman rubin statistics in Model 1")
+```
+
+```{r}
+mod2u_hyper = c("tausq.y", "beta0", "beta1", "tausq.alpha0", "tausq.alpha1")
+mod2u_hyper_chain1 = c(1, 0, 0, 1, 1)
+mod2u_hyper_chain2 = c(100, 100, 100, 100, 100)
+mod2u_hyper_chain3 = c(0.01, -100, -100, 0.01, 0.01)
+# table
+mod2u_results = as.data.frame(cbind(mod2u_hyper_chain1, mod2u_hyper_chain2, mod2u_hyper_chain3))
+mod2u_results$hyperparameters = mod2u_hyper
+mod2u_results$gelman_stat = 1
+colnames(mod2u_results) = c("Chain1_initial", "Chain2_initial", "Chain3_initial", "Hyperparameters", "Gelman_Rubin")
+mod2u_results = mod2u_results %>% select(Hyperparameters, everything())
+table2 = mod2u_results
+kable(table2, caption = "\\label{tab:table2}Hyperparameters and gelman rubin statistics in Model 2A - univariate")
+
+```
+
+```{r}
+mod2b_hyper = c("tausq.y", "beta", "Sigma.alpha.inv")
+mod2b_hyper_chain1 = c(1, "0,0", "diag(2)")
+mod2b_hyper_chain2 = c(100, "100,100", "100*diag(2)")
+mod2b_hyper_chain3 = c(0.01, "-100,-100", "0.01*diag(2)")
+# table
+mod2b_results = as.data.frame(cbind(mod2b_hyper_chain1, mod2b_hyper_chain2, mod2b_hyper_chain3))
+mod2b_results$hyperparameters = mod2b_hyper
+mod2b_results$gelman_stat = 1
+colnames(mod2b_results) = c("Chain1_initial", "Chain2_initial", "Chain3_initial", "Hyperparameters", "Gelman_Rubin")
+mod2b_results = mod2b_results %>% select(Hyperparameters, everything())
+table3 = mod2b_results
+kable(table3, caption = "\\label{tab:table3}Hyperparameters and gelman rubin statistics in Model 2B - bivariate")
+
+```
+
+```{r}
+mod2a0a1_hyper = c("tausq.y", "alpha0", "alpha1")
+mod2a0a1_hyper_chain1 = c(1,0,0)
+mod2a0a1_hyper_chain2 = c(100,100,100)
+mod2a0a1_hyper_chain3 = c(0.01,-100,-100)
+# table
+mod2a0a1_results = as.data.frame(cbind(mod2a0a1_hyper_chain1, mod2a0a1_hyper_chain2, mod2a0a1_hyper_chain3))
+mod2a0a1_results$hyperparameters = mod2a0a1_hyper
+mod2a0a1_results$gelman_stat = 1
+colnames(mod2a0a1_results) = c("Chain1_initial", "Chain2_initial", "Chain3_initial", "Hyperparameters", "Gelman_Rubin")
+mod2a0a1_results = mod2a0a1_results %>% select(Hyperparameters, everything())
+table5 = mod2a0a1_results
+kable(table5, caption = "\\label{tab:table5}Hyperparameters and gelman rubin statistics in Model 2C- alpha1 and alpha0 fixed")
+
+```
+
+```{r}
+mod2a1_hyper = c("tausq.y", "beta0", "alpha1", "tausq.alpha0")
+mod2a1_hyper_chain1 = c(1,0,0,1)
+mod2a1_hyper_chain2 = c(100, 100, 100, 100)
+mod2a1_hyper_chain3 = c(0.01, -100, -100, 0.01)
+# table
+mod2a1_results = as.data.frame(cbind(mod2a1_hyper_chain1, mod2a1_hyper_chain2, mod2a1_hyper_chain3))
+mod2a1_results$hyperparameters = mod2a1_hyper
+mod2a1_results$gelman_stat = 1
+colnames(mod2a1_results) = c("Chain1_initial", "Chain2_initial", "Chain3_initial", "Hyperparameters", "Gelman_Rubin")
+mod2a1_results = mod2a1_results %>% select(Hyperparameters, everything())
+table4 = mod2a1_results
+kable(table4, caption = "\\label{tab:table4}Hyperparameters and gelman rubin statistics in Model 2D - alpha1 fixed")
+
+```
+
+```{r}
+mod3_hyper = c("tausq.y", "beta0", "beta1", "tausq.alpha0", "tausq.alpha1", "alpha2")
+mod3_hyper_chain1 = c(1,0,0,1,1,0)
+mod3_hyper_chain2 = c(100,100,100,100,100,100)
+mod3_hyper_chain3 = c(0.01,-100,-100,0.01,0.01,-100)
+# table
+mod3_results = as.data.frame(cbind(mod3_hyper_chain1, mod3_hyper_chain2, mod3_hyper_chain3))
+mod3_results$hyperparameters = mod3_hyper
+mod3_results$gelman_stat = 1
+colnames(mod3_results) = c("Chain1_initial", "Chain2_initial", "Chain3_initial", "Hyperparameters", "Gelman_Rubin")
+mod3_results = mod3_results %>% select(Hyperparameters, everything())
+table6 = mod3_results
+kable(table6, caption = "\\label{tab:table6}Hyperparameters and gelman rubin statistics in Model 3")
+
+```
+
+## 7.2 JAGS code
+```{r eval = FALSE,  echo=TRUE}
+# model 1
+data {
+  dim.Y <- length(Y)
+}
+
+model {
+  for (i in 1:dim.Y) {
+   Y[i] ~ dnorm( mu[school[i]], tausqW)
+   Yrep[i] ~ dnorm( mu[school[i]], tausqW)
+   
+   error[i] = (Y[i]- mu[school[i]])^2
+   error_rep[i]=(Yrep [i]- mu[school[i]])^2
+  
+  }
+    
+  for (j in 1:school_num){
+   mu[j] ~ dnorm(mu0, tausqB)
+  }
+
+  mu0 ~ dnorm(0, 0.000001)
+
+  tausqW ~ dgamma(0.001, 0.001)
+  tausqB ~ dgamma(0.001, 0.001)
+
+  sigmasqW <- 1 / tausqW
+  sigmasqB <- 1 / tausqB
+
+  chisq <- sum(error/(1/tausqW))
+  chisq_rep <- sum(error_rep/(1/tausqW))
+  ppp <- chisq_rep >= chisq
+  
+  rho <- sigmasqB / (sigmasqB + sigmasqW)
+}
+```
+
+```{r eval = FALSE,  echo=TRUE}
+# model 2A - univariate
+data {
+	dim.Y <- length(Y)
+}
+model {
+	for(i in 1:dim.Y){
+		Y[i] ~ dnorm(mu[i], tausq.y)
+		mu[i] <-  alpha0[school[i]] + alpha1[school[i]] * (x[i] - xbar)	
+		Yrep[i] ~ dnorm( mu[i], tausq.y)
+
+		error[i] = (Y[i]- mu[i])^2
+		error_rep[i]=(Yrep [i]- mu[i])^2
+	}
+	for(j in 1:school_num){
+		alpha0[j] ~ dnorm(beta0, tausq.alpha0)
+		alpha1[j] ~ dnorm(beta1, tausq.alpha1)
+	}
+  tausq.y ~ dgamma(0.001, 0.001)
+  sigma.y <- 1 / sqrt(tausq.y)
+
+  beta0 ~ dnorm(0.0, 1.0E-6)
+  beta1 ~ dnorm(0.0, 1.0E-6)
+  
+  tausq.alpha0 ~ dgamma(0.001, 0.001)
+  tausq.alpha1 ~ dgamma(0.001, 0.001)
+
+  chisq <- sum(error/sigma.y^2)
+  chisq_rep <- sum(error_rep/sigma.y^2)
+  ppp <- chisq_rep >= chisq
+    
+  sigma.alpha0 <- 1 / sqrt(tausq.alpha0)
+  sigma.alpha1 <- 1 / sqrt(tausq.alpha1)
+}
+```
+
+
+```{r eval = FALSE,  echo=TRUE}
+# model 2B - bivariate
+data {
+  dim.Y <- length(Y)
+}
+model {
+	for(i in 1:dim.Y){
+		Y[i] ~ dnorm(mu[i], tausq.y)
+		mu[i] <-  alpha[school[i],1] + alpha[school[i],2] * (x[i] - xbar)	
+		Yrep[i] ~ dnorm( mu[i], tausq.y)
+		error[i] = (Y[i]- mu[i])^2
+		error_rep[i]=(Yrep [i]- mu[i])^2
+	}
+	for(j in 1:school_num){
+		alpha[j,1:2] ~ dmnorm(beta, Sigma.alpha.inv)		
+	}
+  tausq.y ~ dgamma(0.001, 0.001)
+  sigma.y <- 1 / sqrt(tausq.y)
+
+  beta ~ dmnorm(mu0, Sigma0.inv)
+  Sigma.alpha.inv ~ dwish(Omega, 2)
+  Sigma.alpha <- inverse(Sigma.alpha.inv)
+  chisq <- sum(error/sigma.y^2)
+  chisq_rep <- sum(error_rep/sigma.y^2)
+  ppp <- chisq_rep >= chisq
+  rho <- Sigma.alpha[1,2] / sqrt(Sigma.alpha[1,1] * Sigma.alpha[2,2])
+}
+```
+
+```{r eval = FALSE,  echo=TRUE}
+# model 2C - fixed a0a1
+data {
+	dim.Y <- length(Y)
+}
+model {
+	for(i in 1:dim.Y){
+		Y[i] ~ dnorm(mu[i], tausq.y)
+		mu[i] <-  alpha0 + alpha1 * (x[i] - xbar)	
+		Yrep[i] ~ dnorm( mu[i], tausq.y)
+		error[i] = (Y[i]- mu[i])^2
+		error_rep[i]=(Yrep [i]- mu[i])^2
+	}
+  alpha0 ~ dnorm(0.0, 1.0E-6)
+  alpha1 ~ dnorm(0.0, 1.0E-6)
+  
+  tausq.y ~ dgamma(0.001, 0.001)
+  sigma.y <- 1 / sqrt(tausq.y)
+  
+  chisq <- sum(error/sigma.y^2)
+  chisq_rep <- sum(error_rep/sigma.y^2)
+  ppp <- chisq_rep >= chisq
+}
+```
+
+```{r eval = FALSE,  echo=TRUE}
+# model 2D - fixed a1
+data {
+	dim.Y <- length(Y)
+}
+model {
+	for(i in 1:dim.Y){
+		Y[i] ~ dnorm(mu[i], tausq.y)
+		mu[i] <-  alpha0[school[i]] + alpha1 * (x[i] - xbar)	
+		Yrep[i] ~ dnorm( mu[i], tausq.y)
+		error[i] = (Y[i]- mu[i])^2
+		error_rep[i]=(Yrep [i]- mu[i])^2
+	}
+	
+	for(j in 1:school_num){
+		alpha0[j] ~ dnorm(beta0, tausq.alpha0)
+	}
+  alpha1 ~ dnorm(0.0, 1.0E-6)
+  
+  tausq.y ~ dgamma(0.001, 0.001)
+  sigma.y <- 1 / sqrt(tausq.y)
+
+  beta0 ~ dnorm(0.0, 1.0E-6)
+  tausq.alpha0 ~ dgamma(0.001, 0.001)
+  sigma.alpha0 <- 1 / sqrt(tausq.alpha0)
+  
+  chisq <- sum(error/sigma.y^2)
+  chisq_rep <- sum(error_rep/sigma.y^2)
+  ppp <- chisq_rep >= chisq
+}
+```
+
+```{r eval = FALSE,  echo=TRUE}
+# model 3 
+data {
+	dim.Y <- length(Y)
+}
+model {
+	
+	for(i in 1:dim.Y){
+		Y[i] ~ dnorm(mu[i], tausq.y)
+		mu[i] <-  alpha0[school[i]] + alpha1[school[i]] * (x1[i] - xbar) + alpha2 * (x2[i])		
+		
+		Yrep[i] ~ dnorm( mu[i], tausq.y)
+		error[i] = (Y[i]- mu[i])^2
+		error_rep[i]=(Yrep [i]- mu[i])^2
+	}
+	
+	for(j in 1:school_num){
+		alpha0[j] ~ dnorm(beta0, tausq.alpha0)
+		alpha1[j] ~ dnorm(beta1, tausq.alpha1)
+	}
+  alpha2 ~ dnorm(0.0, 1.0E-6)
+  
+  tausq.y ~ dgamma(0.001, 0.001)
+  sigma.y <- 1 / sqrt(tausq.y)
+
+  beta0 ~ dnorm(0.0, 1.0E-6)
+  beta1 ~ dnorm(0.0, 1.0E-6)
+  
+  tausq.alpha0 ~ dgamma(0.001, 0.001)
+  tausq.alpha1 ~ dgamma(0.001, 0.001)
+
+  chisq <- sum(error/sigma.y^2)
+  chisq_rep <- sum(error_rep/sigma.y^2)
+  ppp <- chisq_rep >= chisq
+  
+  sigma.alpha0 <- 1 / sqrt(tausq.alpha0)
+  sigma.alpha1 <- 1 / sqrt(tausq.alpha1)
+}
+```
+
+## 7.3 R codes to run model
+
+```{r eval = FALSE,  echo=TRUE}
+exam <- read.table('Exam.txt')
+colnames(exam) <- c('School ID','Student ID','Score','Constant',
+                    'STD LR','Student Gender','School gender','intake','VR level','Intake level')
+exam_1 = exam[,c(1,3,5)]
+### model 1
+inits <- list(list(mu0=1500, tausqW=0.001, tausqB=0.001), 
+              list(mu0=3000, tausqW=1, tausqB=1), 
+              list(mu0=0, tausqW=0.00001, tausqB=0.00001))
+d <- list(Y = exam_1$Score,
+          school = exam_1$`School ID`,
+          school_num = 65)
+
+m1 <- jags.model("mod1_ppp.bug", d, inits, n.chains=3)
+
+x1 <- coda.samples(m1, c("mu","mu0","sigmasqW","sigmasqB","rho", "ppp"), n.iter=1000) #converged
+x1 <- coda.samples(m1, c("mu","mu0","sigmasqW","sigmasqB","rho", "ppp"), n.iter=10000)
+### model 2A - univariate
+inits <- list(list(tausq.y=1, beta0=0, beta1=0,
+                   tausq.alpha0=1, tausq.alpha1=1),
+              list(tausq.y=100, beta0=100, beta1=100,
+                   tausq.alpha0=100, tausq.alpha1=100),
+              list(tausq.y=0.01, beta0=-100, beta1=-100,
+                   tausq.alpha0=0.01, tausq.alpha1=0.01))
+d <- list(Y = exam_1$Score,
+          x = exam_1$`STD LR`,
+          school = exam_1$`School ID`,
+          school_num = 65,
+          xbar = mean(exam_1$`STD LR`))
+m2_u <- jags.model("mod2_univariate_ppp.bug", d, inits, n.chains=3)
+x2_u <- coda.samples(m2_u, c("beta0","beta1","sigma.y","sigma.alpha0","sigma.alpha1", "ppp"),
+                  n.iter=1000)
+x2_u <- coda.samples(m2_u, c("beta0","beta1","sigma.y","sigma.alpha0","sigma.alpha1", "ppp"),
+                  n.iter=10000) # converged
+### model 2B -bivariate 
+d <- list(Y = exam_1$Score,
+          x = exam_1$`STD LR`,
+          school = exam_1$`School ID`,
+          school_num = 65,
+          xbar = mean(exam_1$`STD LR`),
+          Omega = rbind(c(200, 0),
+                        c(0, 0.2)),
+          mu0 = c(0,0),
+          Sigma0.inv = rbind(c(1.0E-6, 0),
+                             c(0, 1.0E-6))
+          )
+
+inits <- list(list(tausq.y=1, beta=c(0,0),
+                   Sigma.alpha.inv=diag(2)),
+              list(tausq.y=100, beta=c(100,100),
+                   Sigma.alpha.inv=100*diag(2)),
+              list(tausq.y=0.01, beta=c(-100,-100),
+                   Sigma.alpha.inv=0.01*diag(2)))
+m2_b <- jags.model("mod2_bivariate_ppp.bug", d, inits, n.chains=3)
+x2_b <- coda.samples(m2_b, c("beta","sigma.y","Sigma.alpha","rho", "ppp"), n.iter=1000)
+x2_b <- coda.samples(m2_b, c("beta","sigma.y","Sigma.alpha","rho", "ppp"), n.iter=10000) # converged
+
+### model 2C - alpha 0, alpha 1 fixed
+inits <- list(list(tausq.y=1, alpha0=0,alpha1=0),
+              list(tausq.y=100, alpha0=100,alpha1=100),
+              list(tausq.y=0.01, alpha0=-100,alpha1=-100))
+d <- list(Y = exam_1$Score,
+          x = exam_1$`STD LR`,
+          xbar = mean(exam_1$`STD LR`))
+m2_a0a1 <- jags.model("mod2_a0a1_fixed_ppp.bug", d, inits, n.chains=3)
+x2_a0a1 <- coda.samples(m2_a0a1, c("sigma.y","alpha0","alpha1", "ppp"),
+                  n.iter=1000)
+x2_a0a1 <- coda.samples(m2_a0a1, c("sigma.y","alpha0","alpha1", "ppp"),
+                        n.iter=10000)
+### model 2D - alpha 1 fixed
+inits <- list(list(tausq.y=1, beta0=0,alpha1=0,
+                   tausq.alpha0=1),
+              list(tausq.y=100, beta0=100,alpha1=100,
+                   tausq.alpha0=100),
+              list(tausq.y=0.01, beta0=-100,alpha1=-100,
+                   tausq.alpha0=0.01))
+d <- list(Y = exam_1$Score,
+          x = exam_1$`STD LR`,
+          school = exam_1$`School ID`,
+          school_num = 65,
+          xbar = mean(exam_1$`STD LR`))
+m2_a1 <- jags.model("mod2_a1_fixed_ppp.bug", d, inits, n.chains=3)
+x2_a1 <- coda.samples(m2_a1, c("beta0","sigma.y","sigma.alpha0","alpha1", "ppp"),
+                      n.iter=1000)
+x2_a1 <- coda.samples(m2_a1, c("beta0","sigma.y","sigma.alpha0","alpha1", "ppp"),
+                  n.iter=100000)
+### model 3
+exam_1 = exam[,c(1,3,5,6,7)]
+inits <- list(list(tausq.y=1, beta0=0, beta1=0,
+                   tausq.alpha0=1, tausq.alpha1=1, alpha2 = 0),
+              list(tausq.y=100, beta0=100, beta1=100,
+                   tausq.alpha0=100, tausq.alpha1=100, alpha2 = 100),
+              list(tausq.y=0.01, beta0=-100, beta1=-100,alpha2 = -100,
+                   tausq.alpha0=0.01, tausq.alpha1=0.01))
+d <- list(Y = exam_1$Score,
+          x1 = exam_1$`STD LR`,
+          x2 = exam_1$`Student Gender`,
+          school = exam_1$`School ID`,
+          school_num = 65,
+          xbar = mean(exam_1$`STD LR`))
+m3 <- jags.model("mod3_ppp.bug", d, inits, n.chains=3)
+x3 <- coda.samples(m3, c("beta0","beta1","sigma.y",
+                       "sigma.alpha0","sigma.alpha1","alpha2", "ppp"),
+                  n.iter=1000) 
+x3 <- coda.samples(m3, c("beta0","beta1","sigma.y",
+                       "sigma.alpha0","sigma.alpha1","alpha2", "ppp"),
+                  n.iter=100000) # converged
+
+```
+
+## 7.4 Traceplots for all models
+
+```{r, fig.cap="Traceplot for model1"}
+img1 = rasterGrob(as.raster(readPNG("results_Anqi/results_x1/traceplot_x1_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Anqi/results_x1/traceplot_x1_2.png")), interpolate = FALSE)
+grid.arrange(img1, img2)
+```
+
+```{r, fig.cap="Traceplot for model2A - univariate"}
+img1 = rasterGrob(as.raster(readPNG("results_Anqi/results_x2_u/traceplot_x2_u_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Anqi/results_x2_u/traceplot_x2_u_2.png")), interpolate = FALSE)
+grid.arrange(img1, img2)
+```
+
+```{r, fig.cap="Traceplot for model2B - bivariate"}
+img1 = rasterGrob(as.raster(readPNG("results_Yang/mod2_bivariate/mod_2_bivariate_trace1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Yang/mod2_bivariate/mod_2_bivariate_trace2.png")), interpolate = FALSE)
+img3 = rasterGrob(as.raster(readPNG("results_Yang/mod2_bivariate/mod_2_bivariate_trace3.png")), interpolate = FALSE)
+
+grid.arrange(img1, img2, img3)
+```
+
+```{r, fig.cap="Traceplot for model2C - fixed a0a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Yang/mod2_a0a1/mod2_a0a1_trace1.png")), interpolate = FALSE)
+
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Traceplot for model2D - a1 fixed"}
+img1 = rasterGrob(as.raster(readPNG("results_Hannah/traceplot_x2_a1_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Hannah/traceplot_x2_a1_2.png")), interpolate = FALSE)
+grid.arrange(img1, img2)
+```
+
+```{r, fig.cap="Traceplot for model3"}
+img1 = rasterGrob(as.raster(readPNG("results_Hannah/traceplot_x3_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Hannah/traceplot_x3_2.png")), interpolate = FALSE)
+grid.arrange(img1, img2)
+```
+
+
+
+## 7.5 Gelman Rubin plots for all models
+
+```{r, fig.cap="Gelman Rubin plot for model 1 - fixed a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Anqi/results_x1/gelplot_x1.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Gelman Rubin plot for model 2A - univariate"}
+img1 = rasterGrob(as.raster(readPNG("results_Anqi/results_x2_u/gelplot_x2_u.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Gelman Rubin plot for model 2B - bivariate"}
+img1 = rasterGrob(as.raster(readPNG("results_Yang/mod2_bivariate/mod2_bivariate_gelman.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Gelman Rubin plot for model 2C - fixed a0a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Yang/mod2_a0a1/mod2_a0a1_gelman.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Gelman Rubin plot for model2D - fixed a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Hannah/gelstat_x2_a1.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Gelman Rubin plot for model3"}
+img1 = rasterGrob(as.raster(readPNG("results_Hannah/gestate_x3.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+## 7.6 Autocorrelation plots for all models
+
+```{r, fig.cap="Autocorrelation plot for model 1 - fixed a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Anqi/results_x1/auto_x1_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Anqi/results_x1/auto_x1_2.png")), interpolate = FALSE)
+img3 = rasterGrob(as.raster(readPNG("results_Anqi/results_x1/auto_x1_3.png")), interpolate = FALSE)
+
+grid.arrange(img1,img2,img3)
+```
+
+```{r, fig.cap="Autocorrelation plot for model 2A - univariate"}
+img1 = rasterGrob(as.raster(readPNG("results_Anqi/results_x2_u/autocorr_x2_u.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Autocorrelation plot for model 2B - bivariate"}
+img1 = rasterGrob(as.raster(readPNG("results_Yang/mod2_bivariate/mod_2_bivariate_autocorr.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Autocorrelation plot for model 2C - fixed a0a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Yang/mod2_a0a1/mod2_a0a1_autocorr.png")), interpolate = FALSE)
+grid.arrange(img1)
+```
+
+```{r, fig.cap="Autocorrelation plot for model2D - fixed a1"}
+img1 = rasterGrob(as.raster(readPNG("results_Hannah/autocorrplot_x2_a1_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Hannah/autocorrplot_x2_a1_2.png")), interpolate = FALSE)
+img3 = rasterGrob(as.raster(readPNG("results_Hannah/autocorrplot_x2_a1_3.png")), interpolate = FALSE)
+
+grid.arrange(img1,img2,img3)
+```
+
+```{r, fig.cap="Autocorrelation plot for model3"}
+img1 = rasterGrob(as.raster(readPNG("results_Hannah/autocorrplot_x3_1.png")), interpolate = FALSE)
+img2 = rasterGrob(as.raster(readPNG("results_Hannah/autocorrplot_x3_2.png")), interpolate = FALSE)
+img3 = rasterGrob(as.raster(readPNG("results_Hannah/autocorrplot_x3_3.png")), interpolate = FALSE)
+
+grid.arrange(img1,img2,img3)
+```
+
+
+
+
+
